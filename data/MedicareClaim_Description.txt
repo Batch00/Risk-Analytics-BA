@@ -1,0 +1,7 @@
+Description of variables:
+
+STATE - name of state
+YEAR - year
+AVE.DAYS - average hospital stay
+NUM.DCHG - number of discharges
+CCPD - covered claims per discharge

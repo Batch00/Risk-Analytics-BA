@@ -1,0 +1,13 @@
+Description of variables:
+
+
+evt_yr - calendar year of hail event
+HailSize - size of hail
+BLDG_AGE - age of the property
+BLDG_LMT - amount of coverage
+deductible - deductible 
+ShingleRoof - 1 indicates shingle roof and 0 otherwise
+FrameConstruction - 1 indicates frame construction and 0 otherwise
+SingleFamily - 1 indicates single family and 0 otherwise
+RPT_Delay - reporting delay from hail occurrence to the time of reporting
+paidloss - amount of paid losses

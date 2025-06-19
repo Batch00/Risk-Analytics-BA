@@ -1,0 +1,10 @@
+Description of variables:
+
+PolicyNum - policy number of the insurance contract
+Year - calendar year
+Coverage - amount of insurance in millions
+Deduct - amount of deductible
+Freq - number of claims
+Claim - total amount of claims
+EntityType - type of the government entity
+AlarmCredit - premium discount due to alarm system

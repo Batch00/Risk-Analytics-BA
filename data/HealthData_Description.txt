@@ -1,0 +1,22 @@
+Description of variables:
+
+
+year - calendar year
+age - age
+female - 1 female 0 otherwise
+race - 1 white 2 black 3 american indian/alaska native 4 asian 5 native hawaiian/pacific islander 6 multple races
+married - 1 yes 0 no
+edu - years of education 
+income - household income
+msa - 1 yes 0 no
+region - 1 northeast 2 midwest 3 south 4 west
+limitation - 1 yes 0 no to indicate whether presence of physical limitation
+chronic - number of chronic diseases
+smoke - 1 yes 0 no
+industry - categorical
+occupation - categorical
+uninsured - 1 yes 0 no
+
+
+erexp - expense for er visit
+ernum - number of er visit
