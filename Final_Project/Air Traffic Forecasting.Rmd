@@ -1,0 +1,95 @@
+---
+title: "Air Traffic Forcasting"
+author: "Carson Batchelor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(forecast)
+library(tseries)
+```
+
+```{r}
+# Load the Data
+rm(list=ls())
+traffic = read.csv("../data/air traffic.csv")
+names(traffic)
+
+# Check structure
+str(traffic)
+
+# Quick look at first few rows
+head(traffic)
+
+# Check for missing values
+colSums(is.na(traffic))
+```
+
+```{r}
+# Convert all character columns to numeric, ignoring the Date/Year/Month for now
+traffic <- traffic %>%
+  mutate(across(where(is.character), ~ as.numeric(gsub(",", "", .))))
+
+# Combine Year and Month into a proper date
+traffic$Date <- as.Date(with(traffic, paste(Year, Month, "01", sep = "-")), "%Y-%m-%d")
+```
+
+```{r}
+# Total Passengers over time
+ggplot(traffic, aes(x = Date, y = Pax)) +
+  geom_line(color = "blue") +
+  labs(title = "Total Passengers Over Time",
+       x = "Date", y = "Passengers") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(traffic, aes(x = Date, y = LF)) +
+  geom_line(color = "darkgreen") +
+  labs(title = "Monthly Load Factor Over Time",
+       x = "Date", y = "Load Factor (%)") +
+  theme_minimal()
+```
+
+```{r}
+# Domestic vs. International Flights
+traffic_long <- traffic %>%
+  select(Date, Dom_Flt, Int_Flt) %>%
+  pivot_longer(cols = -Date, names_to = "Flight_Type", values_to = "Count")
+
+ggplot(traffic_long, aes(x = Date, y = Count, color = Flight_Type)) +
+  geom_line() +
+  labs(title = "Domestic vs International Flights Over Time",
+       x = "Date", y = "Flight Count") +
+  theme_minimal()
+```
+```{r}
+# Ensure it's ordered by date
+traffic <- traffic %>% arrange(Date)
+
+# Convert to time series object
+pax_ts <- ts(traffic$Pax, start = c(2003, 1), frequency = 12)
+
+autoplot(pax_ts) +
+  labs(title = "Monthly Total Passengers (2003–2023)", x = "Year", y = "Passengers") +
+  theme_minimal()
+
+fit <- auto.arima(pax_ts)
+summary(fit)
+
+forecast_pax <- forecast(fit, h = 24)
+
+autoplot(forecast_pax) +
+  labs(title = "Passenger Forecast (Next 2 Years)", x = "Year", y = "Passengers") +
+  theme_minimal()
+
+```
