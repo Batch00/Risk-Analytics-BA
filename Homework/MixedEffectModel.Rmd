@@ -1,0 +1,159 @@
+---
+title: "MixedEffect"
+author: "Carson Batchelor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Consider dataset MedicareClaim. Use data from years 1 to 5 for training and data from year 6 for testing. 
+
+1. Show the multiple time series plot of variable CCPD using the training data.
+
+```{r, results = "hide", message = FALSE}
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lme4)
+
+rm(list=ls())
+
+# Read the dataset
+medicare = read.table("../../data/MedicareClaim.txt", sep ="", quote = "",header=TRUE)
+medicare
+```
+
+```{r}
+# Filter the training data (years 1 to 5)
+training_data <- medicare %>% filter(YEAR <= 5)
+testing_data <- medicare %>% filter(YEAR > 5)
+
+# multiple time series plot
+p <- ggplot(data=training_data, 
+            aes(x=as.factor(YEAR), 
+            y=CCPD, group=STATE)) +
+  geom_line(linewidth=1.01) + 
+  ggtitle("CCPD v.s. Time") + 
+  xlab('YEAR') + 
+  ylab('CCPD')
+
+p <- p + geom_point(size = 2,color="blue") + theme_bw()
+p
+```
+
+2. Calculate the average CCPD by state. And identify the state that has smallest and largest CCPD. Show trellis plot of CCPD for these two states.
+
+```{r}
+# Calculate the average CCPD by state using training data
+avg_ccpd_by_state <- training_data %>%
+  group_by(STATE) %>%
+  summarise(Avg_CCPD = mean(CCPD, na.rm = TRUE)) %>%
+  arrange(Avg_CCPD)
+avg_ccpd_by_state
+
+# Identify the states with the smallest and largest average CCPD
+state_smallest_ccpd <- avg_ccpd_by_state$STATE[1] 
+state_smallest_ccpd
+
+state_largest_ccpd <- avg_ccpd_by_state$STATE[nrow(avg_ccpd_by_state)]  
+state_largest_ccpd
+
+
+# Trellis plot (smallest and largest CCPD)
+training_data.select <- subset(training_data, STATE %in% c(state_smallest_ccpd,state_largest_ccpd))
+
+p <- ggplot(data=training_data.select, 
+            aes(x=YEAR, 
+                y=CCPD, 
+                group=STATE)) +
+    geom_line() + 
+    geom_point()
+
+p <- p + facet_wrap(~STATE)
+
+p <- p + ggtitle("CCPS v.s. Time") + 
+  scale_x_continuous(name='TIME') +
+  scale_y_continuous(name='CCPD')
+
+p
+```
+
+3. Fit three models using the training data to predict CCPD for year 6. Rank the models based on their prediction performance using Root Mean Squared Error (RMSE) computed from the test data.
+
+a. Random effects model using covaraites AVE.DAYS and NUM.DCHG.
+
+```{r}
+# Fit the random effects model
+# CCPD is the response, AVE.DAYS and NUM.DCHG are fixed effects, STATE is the random effect
+re_model <- lmer(CCPD ~ AVE.DAYS + NUM.DCHG + (1 | STATE), data = training_data)
+
+# Display the model summary
+summary(re_model)
+```
+
+b. Random effects model using covaraites AVE.DAYS and NUM.DCHG and a linear time trend.
+
+```{r}
+# Fit the random effects model with a linear time trend
+# CCPD is the response, AVE.DAYS, NUM.DCHG, and YEAR are fixed effects, STATE is the random effect
+re_time_model <- lmer(CCPD ~ AVE.DAYS + NUM.DCHG + YEAR + (1 | STATE), data = training_data)
+
+# Display the model summary
+summary(re_time_model)
+```
+
+c. Random effects model using covaraites AVE.DAYS and NUM.DCHG and a quadratic time trend.
+
+```{r}
+# Add YEAR_sq to the training and test data for the quadratic time trend model
+training_data <- training_data %>%
+  mutate(YEAR_sq = YEAR^2)
+testing_data <- testing_data %>%
+  mutate(YEAR_sq = YEAR^2)
+
+# Fit the random effects model with a quadratic time trend
+# CCPD is the response, AVE.DAYS, NUM.DCHG, YEAR, and YEAR^2 are fixed effects, STATE is the random effect
+re_quad_model <- lmer(CCPD ~ AVE.DAYS + NUM.DCHG + YEAR + YEAR_sq + (1 | STATE),data = training_data)
+
+# Step 3: Display the model summary
+summary(re_quad_model)
+```
+
+```{r}
+# Predictions and RMSE for random effecs model
+pred_re <- predict(re_model, newdata = testing_data, type="response")
+
+pred_re_RMSE = sqrt(mean((testing_data$CCPD - pred_re)^2, na.rm = TRUE))
+
+# Predictions and RMSE for Time Trend model
+pred_re_time <- predict(re_time_model, newdata = testing_data, type="response")
+
+pred_re_time_RMSE = sqrt(mean((testing_data$CCPD - pred_re_time)^2, na.rm = TRUE))
+
+# Predictions and RMSE for Quad model
+pred_re_quad <- predict(re_quad_model, newdata = testing_data, type="response")
+
+pred_re_quad_RMSE = sqrt(mean((testing_data$CCPD - pred_re_quad)^2, na.rm = TRUE))
+```
+
+```{r}
+# Compare Models
+cat("RMSE for Random Effect Model:", pred_re_RMSE, "\n")
+
+cat("RMSE for random effects model with a linear time trend model:", pred_re_time_RMSE, "\n")
+
+cat("RMSE for random effects model with a quadratic time trend:", pred_re_quad_RMSE, "\n")
+
+```
+
+## Models Ranked
+
+1. Random Effects Model with Quadratic Trend:	715.9197
+2. Random Effects Model with Linear Trend: 1018.573
+3. Random Effects Model: 1590.744
+
+

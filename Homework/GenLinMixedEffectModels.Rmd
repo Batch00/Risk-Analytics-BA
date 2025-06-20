@@ -1,0 +1,159 @@
+---
+title: "GLMM Homework"
+author: "Carson Batchelor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Consider dataset PropertyFund. The goal is to predict whether a policyholder will have claims for a given year. Use data from years 2006 to 2009 for training and data from year 2010 for testing.
+
+```{r, results = "hide", message = FALSE}
+# Inputs
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lme4)
+library(ROCR)
+```
+
+```{r}
+# load property fund data
+rm(list=ls())
+pfDat = read.table("../../data/PropertyFund.txt", sep ="", quote = "",header=TRUE)
+names(pfDat)
+
+# create a binary outcome to indicate occurrence of claims
+pfDat$Freq0 <- 1*(pfDat$Freq>0)
+
+# split data into train and test
+idx <- which(pfDat$Year < 2010)
+traindat <- pfDat[idx,]
+testdat <- pfDat[-idx,]
+```
+
+There are two analyst HOM and HET, and both use log(Coverage), log(Deduct), and EntityType as input variables in their model development. The analyst explores several modeling strategies:
+
+1. Analyst HOM considers two homogenenous logistic models: (1) treating EntityType as fixed; (2) treating EntityType as random.
+
+```{r}
+# Homogeneous Logistic models
+# Fixed effects model
+logitFix <- glm(Freq0 ~ log(Coverage) + log(Deduct) + EntityType, family=binomial, data=traindat)
+
+summary(logitFix)
+
+# Random effects model
+logitRE <- glmer(Freq0 ~ log(Coverage) + log(Deduct) + (1|EntityType), family=binomial, data=traindat)
+
+summary(logitRE)
+```
+
+- 1a. Which model will analyst HOM select based on the goodness-of-fit statistics AIC.
+
+  - Model 1 Fixed: AIC = 3964.7
+  - Model 2 Random: AIC = 3981.0
+  - Based on AIC, analyst HOM will choose model 1 that is the fixed effect model.
+  
+- 1b. which model will analyst HOM select based on the test error rate.
+
+```{r}
+# predictions
+predFixed <- predict(logitFix, newdata = testdat, type="response")
+predRE <- predict(logitRE, newdata = testdat, type="response")
+
+# MSE
+mseFixed <- mean((predFixed - testdat$Freq)^2) 
+mseRE <- mean((predRE - testdat$Freq)^2) 
+print(c(mseFixed,mseRE))
+
+# Overall error rate
+classFixed <- ifelse(predFixed > 0.5, 1, 0)
+classRE <- ifelse(predRE > 0.5, 1, 0)
+
+errFixed <- mean(classFixed != testdat$Freq0)
+errRE <- mean(classRE != testdat$Freq0)
+
+print(c(errFixed,errRE))
+```
+  - analyst HOM would select the fixed effect model 1 becuase of a lower MSE and lower test error rate
+
+2. Analyst HET considers two heterogeneous logistic models: (1) treating EntityType as fixed; (2) treating EntityType as random.
+
+```{r}
+# Heterogeneous logistic fixed effect model
+logitHetFix <- glm(Freq0 ~ log(Coverage) * EntityType + log(Deduct) * EntityType, 
+                   family=binomial, data=traindat)
+summary(logitHetFix)
+
+# Heterogeneous Logistic Random effect model
+logitHetRE <- glmer(Freq0 ~ log(Coverage) + log(Deduct) + (log(Coverage) + log(Deduct) | EntityType), family=binomial, data=traindat)
+
+summary(logitHetRE)
+
+```
+
+- a.  Which model will analyst HET select based on the goodness-of-fit statistics AIC.
+
+```{r}
+AIC(logitHetFix)
+AIC(logitHetRE)
+```
+  - Model 1 Fixed: AIC = 3963.18
+  - Model 2 Random: AIC = 3979.515
+  - Based on AIC, analyst HET will choose model 1 that is the fixed effect model.
+  
+- b.  which model will analyst HET select based on the test error rate.
+
+```{r}
+predHetFix <- predict(logitHetFix, newdata = testdat, type="response")
+predHetRE <- predict(logitHetRE, newdata = testdat, type="response")
+
+mseHetFix <- mean((predHetFix - testdat$Freq)^2)
+mseHetRE <- mean((predHetRE - testdat$Freq)^2)
+
+print(c(mseHetFix, mseHetRE))
+
+# Overall error rate
+classHetFixed <- ifelse(predHetFix > 0.5, 1, 0)
+classHetRE <- ifelse(predHetRE > 0.5, 1, 0)
+
+errHetFixed <- mean(classHetFixed != testdat$Freq0)
+errHetRE <- mean(classHetRE != testdat$Freq0)
+
+print(c(errHetFixed,errHetRE))
+```
+  - analyst HET would select the Random effect model 2 becuase of a lower test error rate
+  
+Compare the AUC on test data between the models selected by the two analysts based on test error rate.
+
+  - Higher AUC better
+
+```{r}
+# Predictions for HOM’s chosen model (Fixed Effects Model)
+predHOM <- predict(logitFix, newdata=testdat, type="response")
+
+# Predictions for HET’s chosen model (Fixed Effects Heterogeneous Model)
+predHET <- predict(logitHetRE, newdata=testdat, type="response")
+
+# Convert actual labels to factor
+actual <- testdat$Freq0  
+
+# Function to compute AUC
+compute_auc <- function(preds, actual) {
+  pred_obj <- prediction(preds, actual)
+  perf_obj <- performance(pred_obj, measure="auc")
+  return(as.numeric(perf_obj@y.values))
+}
+
+# Compute AUC for both models
+auc_HOM <- compute_auc(predHOM, actual)
+auc_HET <- compute_auc(predHET, actual)
+
+# Print AUC values
+print(c(AUC_HOM = auc_HOM, AUC_HET = auc_HET))
+
+```

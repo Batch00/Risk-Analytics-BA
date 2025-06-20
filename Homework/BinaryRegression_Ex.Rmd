@@ -1,0 +1,190 @@
+---
+title: "Binary Regression Homework"
+author: "Carson Batchelor"
+output: html_document
+---
+
+<br>
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+Consider dataset HailRisk.txt. Define insurance claims of zero payment as fraudulent claims. Use observations in year 2013 as training data and year 2014 as test data.
+
+
+<br>
+
+1. Using training data, fit two binary regression models with cloglog link function:
+
+  + i) Use inputs `HailSize` and `log(RPT_Delay)`
+
+  + ii) Use inputs `HailSize`, `log(RPT_Delay)`, and `FrameConstruction`
+
+Report estimated models. 
+
+
+```{r}
+# Read in Data
+rm(list=ls())
+data = read.table(file='../../data/HailRisk.txt', header=TRUE, sep="", dec = ".")
+names(data)
+
+# Define fraudulent claims (zero-payment claims)
+data$fraud <- 1*(data$paidloss==0)
+
+# Split data into training (2013) and test (2014)
+train_data <- subset(data, evt_yr == 2013)
+test_data <- subset(data, evt_yr == 2014)
+
+# logistic regression 1
+fit1 <- glm(fraud~ HailSize + log(RPT_Delay), family=binomial(link = "cloglog"), data=train_data)  
+summary(fit1)
+
+# logistic regression 2
+fit2 <- glm(fraud~ HailSize + log(RPT_Delay) + FrameConstruction, family=binomial(link = "cloglog"), data=train_data)  
+summary(fit2)
+```
+
+
+
+<br>
+
+2. Generate ROC curses based on predictions using training data. Calculate the AUC. Report two curves on one plot and clearly label the two curves (for instance, you can use different colors or types of line). Based on training data AUC, which model is preferred.
+
+```{r}
+# Install package
+# install.packages("ROCR")
+# Load necessary package
+library(ROCR)
+
+# Predictions for Model 1
+predprob1 <- predict(fit1, newdata = train_data, type = "response")
+pred1 <- prediction(predprob1, train_data$fraud)
+perf1 <- performance(pred1, "tpr", "fpr")
+
+# Predictions for Model 2
+predprob2 <- predict(fit2, newdata = train_data, type = "response")
+pred2 <- prediction(predprob2, train_data$fraud)
+perf2 <- performance(pred2, "tpr", "fpr")
+
+# Plot ROC curve for Model 1
+plot(perf1, col = "red", lty = 1, lwd = 2)
+abline(0,1, lty = 2)
+
+# Add ROC curve for Model 2
+plot(perf2, col = "blue", lty = 2, lwd = 2, add = TRUE)
+
+# Add legend
+legend("bottomright", legend = c("Model 1", "Model 2"), 
+       col = c("red", "blue"), lty = c(1, 2), lwd = 2)
+
+```
+```{r}
+# Compute AUC for Model 1
+auc1 <- performance(pred1, measure = "auc")@y.values[[1]]
+auc1
+
+# Compute AUC for Model 2
+auc2 <- performance(pred2, measure = "auc")@y.values[[1]]
+auc2
+
+# Print AUC values
+cat("AUC for Model 1:", auc1, "\n")
+cat("AUC for Model 2:", auc2, "\n")
+```
+Model 2 is preferred because of a higher AUC
+
+<br>
+
+3. Generate ROC curses based on predictions using test data. Calculate the AUC. Report two curves on one plot and clearly label the two curves (for instance, you can use different colors or types of line). Based on test data AUC, which model is preferred.
+
+```{r}
+
+# Predictions for Model 1
+predprob1 <- predict(fit1, newdata = test_data, type = "response")
+pred1 <- prediction(predprob1, test_data$fraud)
+perf1 <- performance(pred1, "tpr", "fpr")
+
+# Predictions for Model 2
+predprob2 <- predict(fit2, newdata = test_data, type = "response")
+pred2 <- prediction(predprob2, test_data$fraud)
+perf2 <- performance(pred2, "tpr", "fpr")
+
+# Plot ROC curve for Model 1
+plot(perf1, col = "red", lty = 1, lwd = 2)
+abline(0,1, lty = 2)
+
+# Add ROC curve for Model 2
+plot(perf2, col = "blue", lty = 2, lwd = 2, add = TRUE)
+
+# Add legend
+legend("bottomright", legend = c("Model 1", "Model 2"), 
+       col = c("red", "blue"), lty = c(1, 2), lwd = 2)
+
+```
+```{r}
+
+# Compute AUC for Model 1
+auc1 <- performance(pred1, measure = "auc")@y.values[[1]]
+auc1
+
+# Compute AUC for Model 2
+auc2 <- performance(pred2, measure = "auc")@y.values[[1]]
+auc2
+
+# Print AUC values
+cat("AUC for Model 1:", auc1, "\n")
+cat("AUC for Model 2:", auc2, "\n")
+
+```
+Model 1 is preferred now because of a higher AUC
+
+<br>
+
+
+4. How do you reconcile the results in questions (2) and (3).
+
+Model 2 had an extra variable (FrameConstruction), which may have helped on the training set but led to overfitting, reducing performance on unseen data.
+The lower AUC in the test set suggests that FrameConstruction might not be a reliable predictor for fraud detection.
+
+<br>
+
+5. Suppose an analyst uses a threshold to assign a label to each insurance claim in the test data. For claims labeled as ``fraud'', an additional audit is conducted at a cost of \$200 per claim. If the audited claim is indeed fraudulent, the insurer saves \$1,000. 
+
+The analyst selects the optimal threshold that maximizes the total savings from claims in the test data. Determine the optimal threshold using the best-performing model from questions (1)-(3).
+
+```{r}
+
+# Define cost parameters
+audit_cost <- 200
+fraud_savings <- 1000
+
+# Predictions on test data using Model 1
+predprob_test <- predict(fit1, newdata = test_data, type = "response")
+pred_test <- prediction(predprob_test, test_data$fraud)
+
+# Extract false positives (fp) and false negatives (fn) for each threshold
+fp <- pred_test@fp[[1]]  # False positives (audited but not fraud)
+fn <- pred_test@fn[[1]]  # False negatives (missed fraud)
+tp <- pred_test@tp[[1]]  # True positives (correctly identified fraud)
+thresholds <- pred_test@cutoffs[[1]]
+
+# Total cost = Audit cost for FP & TP - Savings from correctly caught fraud (TP)
+total_savings <- (tp * fraud_savings) - ((tp + fp) * audit_cost)
+
+# Find optimal threshold
+optimal_index <- which.max(total_savings)
+optimal_threshold <- thresholds[optimal_index]
+max_savings <- total_savings[optimal_index]
+
+# Print results
+cat("Optimal Threshold:", optimal_threshold, "\n")
+cat("Maximum Total Savings: $", max_savings, "\n")
+
+
+```
+
+
+<br><br>
+<br>

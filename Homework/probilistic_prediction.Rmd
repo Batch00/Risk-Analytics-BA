@@ -1,0 +1,128 @@
+---
+title: "Probilistic_Prediction"
+author: "Carson Batchelor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load libraries
+library(quantreg)
+library(MASS)
+```
+This exercise reviews methods for constructing prediction intervals. Consider data set HailRisk, focusing on the variable paidloss, the amount losses due to hail damage.
+
+Restrict the dataset to observations with positive paidloss values by removing any records with non-positive values. Split the data into two parts: use the first 4,500 observations as training set, and the remaining observations as test set.
+
+```{r}
+rm(list=ls())
+
+# read data
+dat <- read.table(file='../../data/HailRisk.txt', header = TRUE, sep = "", dec = ".")
+
+# Filter out non-positive paidloss values
+dat <- dat[dat$paidloss > 0, ]
+
+# Log-transform BLDG_LMT
+dat$log_BLDG_LMT <- log(dat$BLDG_LMT)
+
+# Split the data
+train <- dat[1:4500, ]
+test <- dat[4501:nrow(dat), ]
+```
+
+Consider three methods:
+
+1. Mean regression based on normality
+
+2. Quantile regression
+
+3. Gamma regression
+
+For each method, use the followiing input variables HailSize, logarithm of BLDG_LMT, RPT_Delay, ShingleRoof, and FrameConstruction. Use training data for model development, and construct 90% prediction interval for each observations in test data.
+
+For each method, report the percentage of test observations whose actual paidloss falls within the predicted interval.
+
+```{r}
+# Model formula
+formula <- paidloss ~ HailSize + log_BLDG_LMT + RPT_Delay + ShingleRoof + FrameConstruction
+```
+
+# Mean Regression Assuming Normality
+
+```{r}
+# Fit linear model
+lm_fit <- lm(formula, data = train)
+
+# Predict Meanlog and Get Residual SD
+pred_lm <- predict(lm_fit, newdata = test)
+sigma_ln <- summary(lm_fit)$sigma
+
+# Compute 90% prediction intervals
+alpha <- 0.10
+lower_lm <- qlnorm(alpha / 2, meanlog = pred_lm, sdlog = sigma_ln)
+upper_lm <- qlnorm(1 - alpha / 2, meanlog = pred_lm, sdlog = sigma_ln)
+
+# Check coverage
+covered_lm <- (test$paidloss >= lower_lm) & (test$paidloss <= upper_lm)
+coverage_lm <- mean(covered_lm) * 100
+
+```
+
+# Quantile Regression
+
+```{r}
+# Fit 5th and 95th percentile models
+qr_lower <- rq(formula, data = train, tau = 0.05)
+qr_upper <- rq(formula, data = train, tau = 0.95)
+
+# Predict intervals
+lower_qr <- predict(qr_lower, newdata = test)
+upper_qr <- predict(qr_upper, newdata = test)
+
+# Check coverage
+covered_qr <- (test$paidloss >= lower_qr) & (test$paidloss <= upper_qr)
+coverage_qr <- mean(covered_qr) * 100
+
+```
+
+# Gamma Regression 
+
+```{r}
+# Fit Gamma regression
+gamma_fit <- glm(formula, data = train, family = Gamma(link = "log"))
+
+# Predict mean and standard error
+mu <- predict(gamma_fit, newdata = test, type = "response")
+# Get dispersion parameter (phi)
+phi <- summary(gamma_fit)$dispersion
+
+# Convert to Gamma parameters
+a <- 1 / phi        # shape
+s <- mu * phi       # scale
+
+# Get 90% intervals on link scale, then transform back
+alpha <- 0.10
+lower_gamma <- qgamma(alpha / 2, shape = a, scale = s)
+upper_gamma <- qgamma(1 - alpha / 2, shape = a, scale = s)
+
+# Check coverage
+covered_gamma <- (test$paidloss >= lower_gamma) & (test$paidloss <= upper_gamma)
+coverage_gamma <- mean(covered_gamma) * 100
+
+```
+
+```{r}
+cat("Coverage for Mean Regression (Normality):", round(coverage_lm, 2), "%\n")
+cat("Coverage for Quantile Regression:", round(coverage_qr, 2), "%\n")
+cat("Coverage for Gamma Regression:", round(coverage_gamma, 2), "%\n")
+
+```
+
+Report the percentage of observations in the test data that are covered by the prediction interval. Based on the observed coverage probability, comment on the accuracy of the three methods.
+
+- Quantile regression achieved the highest coverage and is the closest to the target 90%, making it the most accurate method. The poorer performance of mean regression and gamma regression suggests that their assumptions (normality and modeling only the mean, respectively) do not capture the variability in the skewed paidloss data. Quantile regression, which directly estimates prediction intervals, is better suited for this type of data. The Gamma regression model is also accurate with the coverage being 87.8% which is relatively close the the desired 90%. However the mean regression method has a coverage of 78.61% which is considerably lower and far away form the targets 90%.

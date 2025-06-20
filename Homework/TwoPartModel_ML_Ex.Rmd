@@ -1,0 +1,99 @@
+---
+title: "Homework 1 - Two Part Model"
+author: "Carson Batchelor"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+Our goal of this project is to predict the ER expenditure for individual patients. An analyst is developing predictive models using the dataset `HealthData.txt`. Two modeling strategies are considered: linear regression and a two-part model.
+
+The dataset is split into training and test sets, with 70% of the observations allocated to the training set and 30% to the test set, using `set.seed(1)` to ensure reproducibility.
+
+<br> 
+
+(1) For the linear regression, the analyst first fits a model using the following input variables: "age", "female", "married", "edu", "income", "msa", "limitation", "chronic", and "smoke". Next, the model is refitted using only predictors that are statistically significant at the 1\% level. The results of the final trained linear regression model are then reported. Report the results of the final trained linearregression model. 
+
+
+```{r} 
+# put R code here 
+# Read in Data
+rm(list=ls())
+dat = read.table(file='../data/HealthData.txt', header=TRUE, sep="", dec = ".")
+names(dat)
+
+set.seed(1)
+# split data
+nsize <- 0.7*nrow(dat)
+index <- sample(1:nrow(dat), nsize, replace = F)
+
+dat.train <- dat[index,]
+dat.test <- dat[-index,]
+
+# Fit a Linear Regression
+fit <- lm(erexp ~ age + female + married + edu + income + msa + limitation + chronic + smoke, data=dat.train)
+summary(fit)
+```
+```{r}
+# Significant predictors for the Linear Regression at a 1% significance level are age, female, limitation, chronic, and smoke
+# Refit the linear model only using the significant predictors
+fit <- lm(erexp ~ age + female + limitation + chronic + smoke, data=dat.train)
+summary(fit)
+```
+<br> 
+
+(2) For the two-part model, the analyst applies a combination of logistic regression and linear regression. In both components, the same method for variable selection is used: first, a model is fitted, and then only input variables that are significant at the 1\% level are retained. Report the results of the final trained two-part model.
+
+```{r} 
+# Fit a Linear Regression
+dat.train.pos <- subset(dat.train, erexp>0)
+fit2 <- lm(erexp ~ age + female + married + edu + income + msa + limitation + chronic + smoke, data=dat.train.pos)
+summary(fit2)
+
+# fit a logistic regression
+dat.train$erexp0 = 1*(dat.train$erexp>0)
+fit1 <- glm(erexp0 ~ age + female + married + edu + income + msa + limitation + chronic + smoke, family=binomial(link = "logit"), data=dat.train)
+summary(fit1)
+```
+
+
+```{r}
+# Significant predictors for the Linear Regression at a 1% significance level are married and chronic
+# Refit the linear model only using the significant predictors
+dat.pos <- subset(dat, erexp>0)
+fit2 <- lm(erexp ~ married + chronic, data=dat.train.pos)
+summary(fit2)
+
+# Significant predictors for the logistic predictors at a 1% significance level are age, female, income, limitation, chronic, and smoke
+# Refit the linear model only using the significant predictors
+dat$erexp0 = 1*(dat$erexp>0)
+fit1 <- glm(erexp0 ~ age + female + income + limitation + chronic + smoke, family=binomial(link = "logit"), data=dat.train)
+summary(fit1)
+```
+
+<br> 
+
+(3) Compare the predictive performance of the two strategies by reporting the mean squared error (MSE) on the test data for both methods.
+
+```{r} 
+# prediction
+pred1 <- predict(fit1,newdata=dat.test,type="response")
+pred2 <- predict(fit2,newdata=dat.test,type="response")
+pred.tp <- pred1*pred2
+mse.tp <- mean((pred.tp - dat.test$erexp)^2)
+```
+
+```{r}
+# Report the MSE of both models
+pred.lm <- predict(fit,newdata=dat.test,type="response")
+mse.lm <- mean((pred.lm - dat.test$erexp)^2)
+
+print(c(mse.lm,mse.tp))
+```
+<br> 
+
+
+<br> 
+
+
+

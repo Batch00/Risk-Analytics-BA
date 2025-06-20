@@ -1,0 +1,198 @@
+---
+title: "PointPredictionModel"
+author: "Carson Batchelor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Consider data set MedicareClaim, where the goal is to predict CCPD for each state. Data from years 1-5 are used to construct predictions, and data from year 6 are reserved for validation.
+
+```{r, results = "hide", message = FALSE}
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(quantreg)
+
+rm(list=ls())
+
+# Read the dataset
+medicare = read.table("../../data/MedicareClaim.txt", sep ="", quote = "",header=TRUE)
+```
+
+```{r}
+# Filter the training data (years 1 to 5)
+train <- medicare %>% filter(YEAR <= 5)
+test <- medicare %>% filter(YEAR > 5)
+
+names(train)
+```
+
+Two strategies are considered for generating predictions:
+
+  - using predictors AVE.DAYS, NUM.DCHG with no time trend
+  - using predictors AVE.DAYS, NUM.DCHG and a linear time trend
+
+
+1. Analyst A uses the expected value of CCPD in each state as the prediction. Calculate the mean squared error (MSE) and mean absolute error (MAE) for strategies a) and b) using the test data.
+
+```{r}
+# Strategy a) Model without time trend
+model_a <- lm(CCPD ~ AVE.DAYS + NUM.DCHG, data = train)
+# Strategy b) Model with linear time trend
+model_b <- lm(CCPD ~ AVE.DAYS + NUM.DCHG + YEAR, data = train)
+
+# Predictions on test data
+pred_a <- predict(model_a, newdata = test)
+pred_b <- predict(model_b, newdata = test)
+
+# Compute MSE and MAE for both strategies
+mse_a <- mean((test$CCPD - pred_a)^2)
+mae_a <- mean(abs(test$CCPD - pred_a))
+
+mse_b <- mean((test$CCPD - pred_b)^2)
+mae_b <- mean(abs(test$CCPD - pred_b))
+```
+
+Strategy A (No time trend):
+
+MSE: 11117827
+
+MAE: 2199.22 
+
+Strategy B (With time trend):
+
+MSE: 9426842
+
+MAE: 2283.79 
+
+
+2. Do the results from 1) support the presence of a time trend? Provide justification for your answer.
+
+- Yes, the results support the presence of a time trend because adding YEAR as a predictor improves overall predictive performance (MSE). The slight increase in MAE is an acceptable tradeoff for capturing meaningful time-related variation.
+
+# Just Looking at predicting with Median Value
+
+3. Analyst B uses the median value of CCPD in each state as the prediction. Calculate the mean squared error (MSE) and mean absolute error (MAE) for strategies a) and b) using the test data.
+
+```{r}
+# Calculate median CCPD by state from training data
+median_by_state <- train %>%
+  group_by(STATE) %>%
+  summarize(median_CCPD = median(CCPD, na.rm = TRUE))
+
+# Merge median values into test data
+test_with_median <- test %>%
+  left_join(median_by_state, by = "STATE")
+
+# Predicted values from median
+pred_median <- test_with_median$median_CCPD
+
+# Actual values
+actual <- test_with_median$CCPD
+
+# Compute MSE and MAE
+mse_median <- mean((actual - pred_median)^2)
+mae_median <- mean(abs(actual - pred_median))
+```
+
+Analyst B (Median CCPD by state):
+
+MSE: 2495710 
+
+MAE: 1347.94 
+
+
+# Compare Results
+
+Analyst A – No Time Trend	
+
+  - MSE: 11,117,827	
+  
+  - MAE: 2,199.22
+
+Analyst A – With Time Trend	
+
+  - MSE: 9,426,842	
+  
+  - MAE: 2,283.79
+
+Analyst B – Median Only	
+
+  - MSE: 2,495,710
+  
+  - MAE: 1,347.94
+
+
+4. Do the results from 3) support the presence of a time trend? Provide justification for your answer.
+
+- No, the results from (3) do not support the presence of a time trend because the median-based approach (which ignores year) has substantially lower MSE and MAE than both modeling strategies, even the one that includes a time trend.
+
+# Using RQ model with median value for Startegy A and B
+
+3. Analyst B uses the median value of CCPD in each state as the prediction. Calculate the mean squared error (MSE) and mean absolute error (MAE) for strategies a) and b) using the test data.
+
+```{r}
+# Strategy a) Median Model without time trend
+model_a_med <- rq(CCPD ~ AVE.DAYS + NUM.DCHG, tau = 0.5, data = train)
+
+# Strategy b) Median Model without time trend
+model_b_med <- rq(CCPD ~ AVE.DAYS + NUM.DCHG + YEAR, tau = 0.5, data = train)
+
+# Predictions on test data
+pred_a_med <- predict(model_a_med, newdata = test)
+pred_b_med <- predict(model_b_med, newdata = test)
+
+# Compute MSE and MAE for both strategies
+mse_a <- mean((test$CCPD - pred_a_med)^2)
+mae_a <- mean(abs(test$CCPD - pred_a_med))
+
+mse_b <- mean((test$CCPD - pred_b_med)^2)
+mae_b <- mean(abs(test$CCPD - pred_b_med))
+```
+
+# Compare Results
+
+# Analyst B
+
+Strategy A (Median No time trend):
+
+MSE: 12794524
+
+MAE: 2373.192 
+
+Strategy B (Median With time trend):
+
+MSE: 8998208
+
+MAE: 2124.386 
+
+
+# Analyst A
+
+Strategy A – No Time Trend	
+
+  - MSE: 11,117,827	
+  
+  - MAE: 2,199.22
+
+Strategy B – With Time Trend	
+
+  - MSE: 9,426,842	
+  
+  - MAE: 2,283.79
+
+
+4. Do the results from 3) support the presence of a time trend? Provide justification for your answer.
+
+- The results do support the presence of a time trend because the MSE and MAE of strategy B (time trend) is less than the MSE and MAE of strategy A (no time trend). 
+
+
+5. When deciding whether to use the expected value or the median value of CCPD for prediction, should MSE or MAE be used to guide the selection? Justify your choice.
+
+- I think that MAE should be used to guide the selection between the expected value and the median for predicting CCPD because Median minimizes MAE, which seems more appropriate for this context. Also, On the other side, MSE could be used if we cared about minimizing larger errors (If big mistakes are very costly), but it’s more sensitive to outliers. So, for most prediction tasks, MAE will give you the best sense of how to choose between the median and expected value for predictions.
+

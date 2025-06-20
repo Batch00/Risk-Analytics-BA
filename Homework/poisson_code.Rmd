@@ -1,0 +1,97 @@
+---
+title: "Poisson Homework 3"
+author: "Carson Batchelor"
+output: html_document
+date: "2025-02-16"
+---
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+Consider the data set PropertyFund.txt, which contains commercial property insurance claims for a portfolio of entities. An analyst builds a model for the claim occurrence rate, and uses the developed model to predict the number of claims for each entity. The claim occurrence rate is defined as the number of claims per dollar of coverage per year. The model is trained using data from 2006 to 2008, with validation performed on data from 2009 to 2010.
+
+```{r}
+# read data
+rm(list=ls())
+dat <- read.table(file='../../data/PropertyFund.txt', header = TRUE, sep = "", dec = ".")
+
+names(dat)
+
+# Split data
+train_data <- subset(dat, Year >= 2006 & Year <= 2008)
+test_data <- subset(dat, Year >= 2009 & Year <= 2010)
+```
+
+
+1. The first model the analyst considers is a linear regression model with inputs EntityType and log(Deduct). Report the trained model, and calculate MSE for the predicted claim count using both training and test data.
+
+```{r}
+# Fit linear regression model
+lin_model <- lm(Freq ~ factor(EntityType) + log(Deduct), data=train_data)
+summary(lin_model)
+```
+
+```{r}
+# Predictions on training and test sets
+pred.train <- predict(lin_model, newdata=train_data, type="response")
+pred.test <- predict(lin_model, newdata=test_data, type="response")
+
+# Calculate Mean Squared Error (MSE)
+mse.train <- mean((pred.train - train_data$Freq)^2)
+mse.test <- mean((pred.test - test_data$Freq)^2)
+
+# Print MSE values
+cat("Linear Model MSE (Train):", mse.train, "\n")
+cat("Linear Model MSE (Test):", mse.test, "\n")
+```
+
+2. The second model the analyst considers is a poisson regression model with inputs EntityType and log(Deduct). Report the trained model, and calculate MSE for the predicted claim count using both training and test data.
+
+```{r}
+# Fit Poisson regression model
+poisson_model <- glm(Freq ~ factor(EntityType) + log(Deduct), family=poisson(link='log'), data=train_data)
+summary(poisson_model)
+```
+```{r}
+pred.train <- predict(poisson_model, newdata=train_data, type="response")
+pred.test <- predict(poisson_model, newdata=test_data, type="response")
+
+# Calculate Mean Squared Error (MSE)
+mse.train <- mean((pred.train - train_data$Freq)^2)
+mse.test <- mean((pred.test - test_data$Freq)^2)
+
+# Print MSE values
+cat("Poisson Model MSE (Train):", mse.train, "\n")
+cat("Poisson Model MSE (Test):", mse.test, "\n")
+```
+
+3. Based on above, which model is preferred? Justify your answer.
+
+The linear model is preferred because of its lower Test MSE value.
+
+4. Propose an approach to assess whether the variable Coverage is a suitable exposure variable for defining the claim occurrence rate. Present your findings.
+
+```{r}
+# Fit Poisson regression model
+poisson_model <- glm(Freq ~ factor(EntityType) + log(Deduct) + log(Coverage), family=poisson(link='log'), data=train_data)
+summary(poisson_model)
+
+pred.train <- predict(poisson_model, newdata=train_data, type="response")
+pred.test <- predict(poisson_model, newdata=test_data, type="response")
+
+# Calculate Mean Squared Error (MSE)
+mse.train <- mean((pred.train - train_data$Freq)^2)
+mse.test <- mean((pred.test - test_data$Freq)^2)
+
+# Print MSE values
+cat("Poisson Model MSE (Train):", mse.train, "\n")
+cat("Poisson Model MSE (Test):", mse.test, "\n")
+```
+Findings:
+
+- Adding log(Coverage) to the Poisson model resulted in a strong positive coefficient (0.78186, p < 2e-16), indicating a significant relationship between coverage and claim frequency.
+- The AIC decreased from 6740.8 to 5692.3, suggesting a substantial improvement in model fit.
+- The strong statistical significance and model enhancement support Coverage as a potential exposure variable for modeling claim occurrence rates.
+- However, from a practical standpoint, it may be worth exploring alternative exposure variables, as the coefficient's confidence interval (approximately 0.76 to 0.8) is close to 1. This suggests that while Coverage is useful, there could be more effective choices in the dataset.

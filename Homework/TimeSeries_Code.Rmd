@@ -1,0 +1,141 @@
+---
+title: "Time Series Code"
+author: "Carson Batchelor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# install.packages("fpp2")
+```
+
+Consider the monthly manufacture of electrical equipment: computer, electronic and optical products. January 1996 - March 2012. Run the following code to create a modified data eeadj by removing the seasonality. Use the first 150 observations as training data to answer questions 1-3, and use the rest observations as test data for question 4.
+
+```{r}
+rm(list=ls())
+
+library(fpp2)
+data("elecequip")
+elecequip %>% stl(s.window='periodic') %>% seasadj() -> eeadj
+force(eeadj)
+
+# Use first 150 observations as training data
+train <- window(eeadj, start=c(1996, 1), end=c(2008, 6))  # Jan 1996 to Jun 2008
+```
+
+1. Display the time series plot along with the corresponding ACF and PACF plots. Propose a ARMA model bases on these plots. Report the fitted model. Use function checkresiduals() to evaluate the residuals of the fitted model. Comment on the results.
+
+```{r}
+# Time series plot
+autoplot(train) + 
+  ggtitle("Seasonally Adjusted Electrical Equipment Production (Jan 1996 - Jun 2008)") +
+  xlab("Year") + ylab("Index")
+
+# ACF plot
+ggAcf(train) + ggtitle("ACF of Training Data")
+
+# PACF plot
+ggPacf(train) + ggtitle("Partial ACF of Training Data")
+```
+
+- Gradual decline in the ACF suggests an AR process and the PACF having a significant spike at lag 1 and 4 and no others suggests an AR(4) model. I propose an AR(4) model
+
+```{r}
+# Fit AR(1) model (ARMA(1,0))
+arma_model <- Arima(train, order=c(4, 0, 0))  # AR(1)
+summary(arma_model)
+
+# Check residuals
+checkresiduals(arma_model)
+```
+
+- The ARIMA(4,0,0) model fits the data reasonably well, with residuals showing no clear patterns, mostly uncorrelated ACF values, and a near-normal distribution. Minor ACF spikes, and occasional large residuals may cause minor concern but I still believe that it is a good fit.
+
+2. Display the time series plot along with the corresponding ACF and PACF plots for the differenced sequence. Propose a ARIMA model bases on these plots. Report the fitted model. Use function checkresiduals() to evaluate the residuals of the fitted model. Comment on the results.
+
+```{r}
+# Compute first differences
+diff_train <- diff(train, lag=1)
+
+# Plot the difference time series, ACF, and PACF
+autoplot(diff_train) + 
+  ggtitle("Differenced Seasonally Adjusted Electrical Equipment Production") +
+  xlab("Year") + ylab("Difference")
+
+ggAcf(diff_train) + ggtitle("ACF of Differenced Training Data")
+
+ggPacf(diff_train) + ggtitle("Partial ACF of Differenced Training Data")
+```
+
+- The ACF cutting off after lag 1 (or 2) suggests an MA(1) or MA(2) component.
+- The PACF with a significant spike at lag 1 and 3 suggests an AR(1) or possibly AR(3) component.
+- Together, this could indicate an ARIMA(3,1,1) model (AR(3), difference order 1, MA(1))
+
+```{r}
+# Fit ARIMA(1,1,1) model
+arima_model <- Arima(train, order=c(3, 1, 1))
+summary(arima_model)
+
+# Check residuals
+checkresiduals(arima_model)
+```
+
+- The ARIMA(1,1,1) model fits the data well, with residuals showing no patterns, no significant autocorrelation, and a near-normal distribution. Minor residual spikes and slight non-normality are not concerning and suggest the model is robust for the training data.
+
+3. Use auto.arima to assistant model development. Does the method support either of the models in 1) and 2)?
+
+```{r}
+# Fit auto.arima model
+auto_model <- auto.arima(train, seasonal=FALSE)
+summary(auto_model)
+
+# Check residuals
+checkresiduals(auto_model)
+```
+
+- auto.arima() selected ARIMA(3,1,0), which does not support the ARIMA(4,0,0) model from question 1 or the ARIMA(3,1,1) model from question 2. Both models share d=1, but auto.arima() favors a higher-order AR(3) without an MA component, optimized for the lowest AICc.
+
+4. Forecast the observations in the test data and calculate the corresponding Mean Squared Error (MSE) using both models from 1) and 2). Which model is better supported by the MSE values?
+
+```{r}
+library(forecast)
+
+test <- window(eeadj, start=c(2008, 7))  # Jul 2008 to Mar 2012
+
+# Fit ARIMA(1,0,0) model
+model1 <- Arima(train, order=c(4, 0, 0))
+summary(model1)
+
+# Fit ARIMA(1,1,1) model
+model2 <- Arima(train, order=c(3, 1, 1))
+summary(model2)
+
+
+# Forecast for the test period
+forecast1 <- forecast(model1, h=length(test))
+print(forecast1)
+# Forecast for the test period
+forecast2 <- forecast(model2, h=length(test))
+print(forecast2)
+```
+```{r}
+# Extract forecasted values (point forecasts)
+forecast1_values <- as.numeric(forecast1$mean)
+forecast2_values <- as.numeric(forecast2$mean)
+
+# Extract actual test values
+test_values <- as.numeric(test)
+
+# Calculate MSE for Model 1
+mse_model1 <- mean((test_values - forecast1_values)^2)
+
+# Calculate MSE for Model 2
+mse_model2 <- mean((test_values - forecast2_values)^2)
+
+# Print MSE values
+cat("MSE for Model 1 (ARIMA(4,0,0)): ", mse_model1, "\n")
+cat("MSE for Model 2 (ARIMA(3,1,1)): ", mse_model2, "\n")
+```
+- The ARIMA(4,0,0) model from question 1 is better supported by the MSE values, as its MSE (275.40) is lower than that of the ARIMA(3,1,1) model (394.79), indicating it provides more accurate forecasts for the test data.
+

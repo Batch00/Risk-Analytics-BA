@@ -1,0 +1,106 @@
+---
+title: "5-TimeSeries2"
+author: "Carson Batchelor"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Utilize the time series data of air-carrier freight for the analysis by following these steps:
+
+```{r}
+rm(list=ls())
+air = ts(scan("../../data/AirFreight.txt"), start=c(1969,1), end=c(1978,12), frequency=12)
+air
+```
+
+
+Step 1. Display the time series plot along with the corresponding ACF and PACF plots. a) Does the data exhibit a non-seasonal trend? b) Does the data exhibit a seasonality?
+
+- Yes, the data exhibits an upward non-seasonal trend, as seen in the general increase in freight volume over time.
+
+- Yes, the data exhibits seasonality with a period of 12 months, as seen in the repeating patterns within each year. in the acf() and pacf() plots, there are significant spikes at lags 0.0,1.0,2.0.
+
+```{r}
+# Time Series plot
+ts.plot(air)
+
+# Auto Correlation and Partial Correlation Plots
+acf(air, lag.max=36)
+
+pacf(air, lag.max=36)
+```
+
+
+Step 2. If your answer to 1-a) is No, skip this question. If your answer to 1-a) is Yes, propose a differencing method to remove the trend from the data. Provide the time series plot of the detrended data along with the corresponding ACF and PACF plots.
+
+```{r}
+# first difference
+air_diff <- diff(air, lag=1)
+
+# First Difference Time Series plot
+ts.plot(air_diff)
+
+# First Difference Auto Correlation and Partial Correlation Plots
+acf(air_diff, lag.max=36)
+pacf(air_diff, lag.max=36)
+```
+
+Step 3. If your answer to 1-b) is No, skip this question. If your answer to 1-b) is Yes, propose a differencing method to further eliminate seasonality. Provide the time series plot of the data with both trend (if applicable) and seasonality removed, along with the corresponding ACF and PACF plots.
+
+```{r}
+# Seasonal differencing to remove seasonality
+air_diff_seas <- diff(air_diff, lag=12)
+
+# Time series plot of data with trend and seasonality removed
+ts.plot(air_diff_seas)
+
+# ACF and PACF plots
+acf(air_diff_seas, lag.max=36)
+pacf(air_diff_seas, lag.max=36)
+```
+
+Step 4. Based on the analysis in steps 2 and 3, use auto.arima to assist model development. Fit and report your final model.
+
+```{r}
+library(forecast)
+
+# Use auto.arima to select the best SARIMA model
+final_model <- auto.arima(air_diff_seas, seasonal=TRUE)
+
+# Report the final model
+summary(final_model)
+```
+
+Step 5. Show the ACF and PACF plots of the residuals from your final model. Assess whether these plots suggest stationarity in the residuals.
+
+- Yese these plots suggest stationarity because:
+- The ACF and PACF plots show no significant autocorrelation with no spikes outside confidence bands.
+- The residuals fluctuate around a constant mean (zero) with constant variance.
+
+```{r}
+# train best model on raw data
+best_model <- Arima(air, order = c(0,1,1), seasonal = c(0,1,1), include.constant = TRUE)
+# Extract residuals
+residuals <- residuals(best_model)
+
+# ACF and PACF plots of residuals
+acf(residuals, lag.max=36)
+pacf(residuals, lag.max=36)
+```
+
+Step 6. Utilize the final model to generate 36-month ahead forecasts for air-carrier freight. Plot both the forecasts and the forecast intervals.
+
+```{r}
+# Generate 36-month ahead forecasts
+forecasts <- forecast(best_model, h=36)
+
+# Plot the forecasts with forecast intervals
+plot(forecasts, main="36-Month Forecasts for Air Freight", ylab="Freight Volume", xlab="Year")
+```
+
+
+
